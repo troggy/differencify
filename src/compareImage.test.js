@@ -12,7 +12,8 @@ jest.mock('jimp', () => ({
 jest.mock('fs', () => ({
   mkdirSync: jest.fn(),
   existsSync: jest.fn(),
-  writeFileSync: jest.fn(),
+  writeFile: jest.fn((a, b, c, cb) => cb()),
+  unlink: jest.fn((a, cb) => cb()),
   unlinkSync: jest.fn(),
 }));
 
@@ -55,7 +56,7 @@ const mockTestConfig = {
 
 describe('Compare Image', () => {
   beforeEach(() => {
-    fs.writeFileSync.mockClear();
+    fs.writeFile.mockClear();
     fs.existsSync.mockClear();
     Jimp.distance.mockReturnValue(0);
     Jimp.diff.mockReturnValue({ percent: 0 });
@@ -70,7 +71,12 @@ describe('Compare Image', () => {
         imageType: 'png',
       });
       expect(result).toEqual({ added: true });
-      expect(fs.writeFileSync).toHaveBeenCalledWith('/parent/__image_snapshots__/test.snap.png', Object);
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        '/parent/__image_snapshots__/test.snap.png',
+        Object,
+        {},
+        expect.any(Function),
+      );
     });
     it('ًWill update snapshot when isUpdate=true', async () => {
       const result = await compareImage(Object, mockConfig, {
@@ -81,7 +87,12 @@ describe('Compare Image', () => {
         imageType: 'png',
       });
       expect(result).toEqual({ updated: true });
-      expect(fs.writeFileSync).toHaveBeenCalledWith('/parent/__image_snapshots__/test.snap.png', Object);
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        '/parent/__image_snapshots__/test.snap.png',
+        Object,
+        {},
+        expect.any(Function),
+      );
     });
     it('respects to imageSnapshotPath when in jest mode', async () => {
       const newGlobalConfig = Object.assign({}, mockConfig,
@@ -97,7 +108,12 @@ describe('Compare Image', () => {
         imageType: 'png',
       });
       expect(result).toEqual({ updated: true });
-      expect(fs.writeFileSync).toHaveBeenCalledWith('./someImagePath/test.snap.png', Object);
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        './someImagePath/test.snap.png',
+        Object,
+        {},
+        expect.any(Function),
+      );
     });
   });
 
@@ -110,10 +126,12 @@ describe('Compare Image', () => {
         imageType: 'png',
       });
       expect(result).toEqual({ added: true });
-      expect(fs.writeFileSync)
+      expect(fs.writeFile)
         .toHaveBeenCalledWith(
           './differencify_report/__image_snapshots__/test.snap.png',
           Object,
+          {},
+          expect.any(Function),
         );
     });
     it('ًWill update snapshot when isUpdate=true', async () => {
@@ -124,10 +142,12 @@ describe('Compare Image', () => {
         imageType: 'png',
       });
       expect(result).toEqual({ updated: true });
-      expect(fs.writeFileSync)
+      expect(fs.writeFile)
         .toHaveBeenCalledWith(
           './differencify_report/__image_snapshots__/test.snap.png',
           Object,
+          {},
+          expect.any(Function),
         );
     });
   });

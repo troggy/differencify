@@ -1,54 +1,17 @@
 import Jimp from 'jimp';
-import path from 'path';
-import fs from 'fs';
 
 import logger from './utils/logger';
-import {
-  getSnapshotsDir,
-  getSnapshotPath,
-  getDiffDir,
-  getDiffPath,
-  getCurrentImageDir,
-  getCurrentImagePath,
-} from './utils/paths';
-
-const saveDiff = (diff, diffPath) => new Promise((resolve, reject) => {
-  const cb = (error, obj) => {
-    if (error) {
-      reject(error);
-    }
-    resolve(obj);
-  };
-  diff.image.write(diffPath, cb);
-});
-
-const cleanUpImages = (images) => {
-  images.forEach((image) => {
-    try {
-      fs.unlinkSync(image);
-    } catch (e) {
-      // ignore error as left over image may not exist
-    }
-  });
-};
+import getStorage from './utils/storage';
 
 const compareImage = async (capturedImage, globalConfig, testConfig) => {
   const prefixedLogger = logger.prefix(testConfig.testName);
-  const snapshotsDir = globalConfig.imageSnapshotPathProvided
-    ? path.resolve(globalConfig.imageSnapshotPath)
-    : getSnapshotsDir(testConfig, globalConfig);
+  const storage = getStorage(testConfig, globalConfig);
 
-  const snapshotPath = getSnapshotPath(snapshotsDir, testConfig);
+  const { snapshotPath, diffPath } = storage;
 
-  const diffDir = getDiffDir(snapshotsDir);
-  const diffPath = getDiffPath(diffDir, testConfig);
+  storage.cleanupBefore();
 
-  const currentImageDir = getCurrentImageDir(snapshotsDir);
-  const currentImagePath = getCurrentImagePath(currentImageDir, testConfig);
-
-  cleanUpImages([diffPath, currentImagePath]);
-
-  if (fs.existsSync(snapshotPath) && !testConfig.isUpdate) {
+  if (storage.snapshotExists() && !testConfig.isUpdate) {
     let snapshotImage;
     try {
       snapshotImage = await Jimp.read(snapshotPath);
@@ -75,33 +38,10 @@ const compareImage = async (capturedImage, globalConfig, testConfig) => {
       };
     }
     if (globalConfig.saveCurrentImage) {
-      try {
-        if (!fs.existsSync(currentImageDir)) {
-          fs.mkdirSync(currentImageDir);
-        }
-        if (fs.existsSync(currentImagePath)) {
-          fs.unlinkSync(currentImagePath);
-        }
-        fs.writeFileSync(currentImagePath, capturedImage);
-      } catch (error) {
-        prefixedLogger.error(`failed to save the current image: ${currentImagePath}`);
-        prefixedLogger.trace(error);
-      }
+      await storage.saveCurrentImage(capturedImage);
     }
     if (globalConfig.saveDifferencifiedImage) {
-      try {
-        if (!fs.existsSync(diffDir)) {
-          fs.mkdirSync(diffDir);
-        }
-        if (fs.existsSync(diffPath)) {
-          fs.unlinkSync(diffPath);
-        }
-        await saveDiff(diff, diffPath);
-        prefixedLogger.log(`saved the diff image to disk at ${diffPath}`);
-      } catch (error) {
-        prefixedLogger.error(`failed to save the diff image: ${diffPath}`);
-        prefixedLogger.trace(error);
-      }
+      await storage.saveDiff(diff);
     }
 
     prefixedLogger.error(`mismatch found❗
@@ -114,14 +54,7 @@ const compareImage = async (capturedImage, globalConfig, testConfig) => {
       snapshotPath, distance, diffPercent: diff.percent, diffPath, matched: false,
     };
   }
-  prefixedLogger.log(`screenshot saved in -> ${snapshotPath}`);
-  if (fs.existsSync(diffPath)) {
-    fs.unlinkSync(diffPath);
-  }
-  if (!fs.existsSync(snapshotsDir)) {
-    fs.mkdirSync(snapshotsDir);
-  }
-  fs.writeFileSync(snapshotPath, capturedImage);
+  await storage.saveScreenshot(capturedImage);
   return testConfig.isUpdate ? { updated: true } : { added: true };
 };
 
